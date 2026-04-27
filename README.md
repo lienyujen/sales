@@ -13,6 +13,7 @@ A lightweight single-page sales-force tracker for internal use.
 - Funnel / hit-rate / deal amount / in-progress count metrics.
 - Filtering by owner, channel, product, and period (week/month/quarter/half/year/all).
 - Opportunity detail table for tracking.
+- Home page always opens with login first; dashboard becomes visible only after successful sign-in.
 
 ## Login accounts
 

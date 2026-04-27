@@ -27,7 +27,6 @@ const CHANNEL_PRODUCTS = {
 };
 
 const STORAGE_KEY = 'company-sales-force-deals-v1';
-const SESSION_KEY = 'company-sales-force-session-v1';
 
 const seedDeals = [
   { owner: 'Chris Wang', projectName: '屏東IFP', customerName: '屏東教育局', contactName: '屏東人', contactPhone: '', contactEmail: '', channel: 'EDU', product: 'IFP', qty: 10, amount: 5000000, expectedDate: '2026-04-08', status: '成交', winRate: 90, notes: '' },
@@ -224,21 +223,17 @@ function showApp(session) {
 function showLogin() {
   appViewEl.classList.add('hidden');
   loginViewEl.classList.remove('hidden');
+  loginErrorEl.textContent = '';
+  loginFormEl.reset();
 }
 
 function startSession(username) {
   const user = USERS[username];
   const session = { username, fullName: user.fullName, role: user.role };
-  sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
   showApp(session);
 }
 
 function initAuth() {
-  const currentSession = sessionStorage.getItem(SESSION_KEY);
-  if (currentSession) {
-    showApp(JSON.parse(currentSession));
-    return;
-  }
   showLogin();
 }
 
@@ -257,7 +252,6 @@ loginFormEl.addEventListener('submit', (e) => {
 });
 
 logoutBtnEl.addEventListener('click', () => {
-  sessionStorage.removeItem(SESSION_KEY);
   showLogin();
 });
 
