@@ -1,5 +1,5 @@
 const TOKEN_KEY = 'sales_force_token';
-const API_BASE_KEY = 'sales_force_api_base';
+const SCRIPT_URL_KEY = 'sales_force_script_url';
 const APP_BASE_PATH = window.location.pathname.startsWith('/sales/') ? '/sales' : '';
 
 function appUrl(path) {
@@ -7,36 +7,22 @@ function appUrl(path) {
 }
 
 function normalizeBase(url) {
-  return (url || '').trim().replace(/\/$/, '');
+  return (url || '').trim();
 }
 
-function defaultApiBase() {
-  const fromQuery = normalizeBase(new URLSearchParams(window.location.search).get('api'));
+function defaultScriptUrl() {
+  const fromQuery = normalizeBase(new URLSearchParams(window.location.search).get('script'));
   if (fromQuery) return fromQuery;
-  const fromWindow = normalizeBase(window.__API_BASE__);
-  if (fromWindow) return fromWindow;
-  const fromStorage = normalizeBase(localStorage.getItem(API_BASE_KEY));
+  const fromStorage = normalizeBase(localStorage.getItem(SCRIPT_URL_KEY));
   if (fromStorage) return fromStorage;
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    return `${window.location.protocol}//${window.location.hostname}:8080`;
-  }
   return '';
 }
 
-let activeApiBase = defaultApiBase();
+let activeScriptUrl = defaultScriptUrl();
 
-function setApiBase(base) {
-  activeApiBase = normalizeBase(base);
-  localStorage.setItem(API_BASE_KEY, activeApiBase);
-}
-
-function isGithubPagesBase(base) {
-  try {
-    const host = new URL(base).hostname;
-    return host.endsWith('github.io');
-  } catch {
-    return false;
-  }
+function setScriptUrl(url) {
+  activeScriptUrl = normalizeBase(url);
+  localStorage.setItem(SCRIPT_URL_KEY, activeScriptUrl);
 }
 
 const CHANNEL_PRODUCTS = {
@@ -57,37 +43,28 @@ function clearToken() {
   sessionStorage.removeItem(TOKEN_KEY);
 }
 
-async function api(path, options = {}) {
-  const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+async function callScript(action, method = 'GET', payload = null) {
+  if (!activeScriptUrl) throw new Error('請先設定 Google Apps Script Web App URL。');
   const token = getToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const bases = [activeApiBase].filter(Boolean);
-  let lastError = null;
+  let url = `${activeScriptUrl}${activeScriptUrl.includes('?') ? '&' : '?'}action=${encodeURIComponent(action)}`;
+  if (token) url += `&token=${encodeURIComponent(token)}`;
 
-  for (const base of bases) {
-      const url = `${normalizeBase(base)}${path}`;
-    try {
-      const res = await fetch(url, { ...options, headers });
-      const text = await res.text();
-      let data = {};
-      try {
-        data = text ? JSON.parse(text) : {};
-      } catch {
-        lastError = new Error(`API 回應不是 JSON（${res.status}，${url}）。`);
-        continue;
-      }
-      if (!res.ok) {
-        lastError = new Error(data.error || `API error (${res.status})`);
-        if (res.status >= 500 || res.status === 404) continue;
-        throw lastError;
-      }
-      activeApiBase = base;
-      return data;
-    } catch (err) {
-      lastError = err;
-    }
+  const opts = { method };
+  if (method === 'POST') {
+    opts.headers = { 'Content-Type': 'application/json' };
+    opts.body = JSON.stringify(payload || {});
   }
-  throw lastError || new Error('無法連接後端 API，請確認 API 伺服器網址設定正確。');
+
+  const res = await fetch(url, opts);
+  const text = await res.text();
+  let data = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error('Apps Script 回應不是 JSON，請確認你已部署為 Web App 並開放存取。');
+  }
+  if (!res.ok || data.ok === false) throw new Error(data.error || `API error (${res.status})`);
+  return data;
 }
 
 function initLoginPage() {
@@ -101,59 +78,45 @@ function initLoginPage() {
   const apiBaseEl = document.getElementById('apiBase');
   let healthOk = false;
 
-  apiBaseEl.value = activeApiBase;
+  apiBaseEl.value = activeScriptUrl;
 
   const checkHealth = async () => {
-    const inputBase = normalizeBase(apiBaseEl.value);
-    setApiBase(inputBase);
+    setScriptUrl(apiBaseEl.value);
     healthOk = false;
-    loginErrorEl.textContent = '';
-
-    if (isGithubPagesBase(inputBase)) {
-      apiStatusEl.textContent = '系統連線異常：GitHub Pages 只能放前端，不能當 API 伺服器。';
+    if (!activeScriptUrl) {
+      apiStatusEl.textContent = '請先填入 Google Apps Script Web App URL。';
       apiStatusEl.classList.add('status-error');
       apiStatusEl.classList.remove('status-ok');
       return;
     }
-    if (!inputBase) {
-      apiStatusEl.textContent = '請先填入後端 API 伺服器網址。';
-      apiStatusEl.classList.add('status-error');
-      apiStatusEl.classList.remove('status-ok');
-      return;
-    }
-
     try {
-      const data = await api('/api/health');
-      apiStatusEl.textContent = `系統連線正常：${data.status}（DB: ${data.database}）`;
+      const data = await callScript('health');
+      apiStatusEl.textContent = `系統連線正常：${data.status}（DB: Google Sheet）`;
       apiStatusEl.classList.add('status-ok');
       apiStatusEl.classList.remove('status-error');
       healthOk = true;
     } catch {
-      apiStatusEl.textContent = '系統連線異常：請確認 API 網址是後端服務（非 github.io）且可連線。';
+      apiStatusEl.textContent = '系統連線異常：請確認 Apps Script URL 與部署權限。';
       apiStatusEl.classList.add('status-error');
       apiStatusEl.classList.remove('status-ok');
     }
   };
-  checkHealth();
 
-  apiBaseEl.addEventListener('change', () => {
-    checkHealth();
-  });
+  checkHealth();
+  apiBaseEl.addEventListener('change', checkHealth);
 
   loginFormEl.addEventListener('submit', async (e) => {
     e.preventDefault();
+    loginErrorEl.textContent = '';
+    await checkHealth();
+    if (!healthOk) {
+      loginErrorEl.textContent = '請先設定可用的 Google Apps Script URL，再登入。';
+      return;
+    }
     try {
-      await checkHealth();
-      if (!healthOk) {
-        loginErrorEl.textContent = '請先設定可用的後端 API 伺服器網址，再登入。';
-        return;
-      }
-      const data = await api('/api/login', {
-        method: 'POST',
-        body: JSON.stringify({
-          username: loginUsernameEl.value.trim(),
-          password: loginPasswordEl.value
-        })
+      const data = await callScript('login', 'POST', {
+        username: loginUsernameEl.value.trim(),
+        password: loginPasswordEl.value
       });
       setToken(data.token);
       window.location.href = appUrl('/dashboard.html');
@@ -240,11 +203,11 @@ async function initDashboardPage() {
       ['正在處理案子', `${inProgress.length} 筆`, `成交 ${wonDeals.length}，結案 ${closedDeals.length}`],
       [`${viewPeriodEl.options[viewPeriodEl.selectedIndex].text} 業績`, trend, '可依業務/Channel/產品切換']
     ].map(([h, v, s]) => `
-        <article class="metric-card">
-          <h3>${h}</h3>
-          <div class="v">${v}</div>
-          <div class="s">${s}</div>
-        </article>`).join('');
+      <article class="metric-card">
+        <h3>${h}</h3>
+        <div class="v">${v}</div>
+        <div class="s">${s}</div>
+      </article>`).join('');
   }
 
   function renderTable(deals) {
@@ -264,13 +227,13 @@ async function initDashboardPage() {
   }
 
   async function fetchDeals() {
-    const params = new URLSearchParams({
-      owner: viewOwnerEl.value || 'all',
-      channel: viewChannelEl.value || 'all',
-      product: viewProductEl.value || 'all'
+    const data = await callScript('deals');
+    return (data.deals || []).filter((d) => {
+      if (viewOwnerEl.value !== 'all' && d.owner !== viewOwnerEl.value) return false;
+      if (viewChannelEl.value !== 'all' && d.channel !== viewChannelEl.value) return false;
+      if (viewProductEl.value !== 'all' && d.product !== viewProductEl.value) return false;
+      return true;
     });
-    const data = await api(`/api/deals?${params.toString()}`);
-    return data.deals;
   }
 
   async function renderAll() {
@@ -279,14 +242,14 @@ async function initDashboardPage() {
     renderTable(deals);
   }
 
-  const me = await api('/api/me').catch(() => null);
+  const me = await callScript('me').catch(() => null);
   if (!me) {
     window.location.href = appUrl('/');
     return;
   }
   currentUserEl.textContent = `使用者：${me.user.full_name}（${me.user.role}）`;
 
-  const usersData = await api('/api/users');
+  const usersData = await callScript('users');
   const salesMembers = usersData.users.map((u) => u.full_name);
   hydrateSelect(ownerEl, salesMembers);
   hydrateSelect(viewOwnerEl, salesMembers, true);
@@ -320,7 +283,7 @@ async function initDashboardPage() {
     };
 
     try {
-      await api('/api/deals', { method: 'POST', body: JSON.stringify(payload) });
+      await callScript('createDeal', 'POST', payload);
       dealForm.reset();
       document.getElementById('expectedDate').valueAsDate = new Date();
       channelEl.value = Object.keys(CHANNEL_PRODUCTS)[0];
