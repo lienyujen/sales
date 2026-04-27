@@ -7,6 +7,7 @@ A lightweight sales-force tracker for internal use.
 - Opportunity records are now stored in **SQLite database** (`sales.db`), not in session/localStorage.
 - Accounts, passwords, and opportunities are seeded/managed in DB tables and loaded from backend after login.
 - Includes backend APIs for login and deal CRUD-lite flows:
+  - `GET /api/health`
   - `POST /api/login`
   - `GET /api/me`
   - `GET /api/users`

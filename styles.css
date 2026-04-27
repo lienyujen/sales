@@ -32,6 +32,9 @@ body {
 .login-card p { margin: 0 0 14px; color: var(--muted); }
 .login-form { display: grid; gap: 10px; }
 .error-text { min-height: 20px; color: #dc2626; }
+.status-text { font-weight: 700; }
+.status-ok { color: #15803d !important; }
+.status-error { color: #b91c1c !important; }
 .topbar {
   background: #fff;
   border-bottom: 1px solid var(--line);

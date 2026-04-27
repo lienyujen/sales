@@ -42,6 +42,17 @@ function initLoginPage() {
   const loginUsernameEl = document.getElementById('loginUsername');
   const loginPasswordEl = document.getElementById('loginPassword');
   const loginErrorEl = document.getElementById('loginError');
+  const apiStatusEl = document.getElementById('apiStatus');
+
+  api('/api/health')
+    .then((data) => {
+      apiStatusEl.textContent = `系統連線正常：${data.status}（DB: ${data.database}）`;
+      apiStatusEl.classList.add('status-ok');
+    })
+    .catch(() => {
+      apiStatusEl.textContent = '系統連線異常：無法連接後端服務，請確認 server.py 已啟動。';
+      apiStatusEl.classList.add('status-error');
+    });
 
   loginFormEl.addEventListener('submit', async (e) => {
     e.preventDefault();

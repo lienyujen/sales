@@ -141,6 +141,12 @@ class Handler(BaseHTTPRequestHandler):
                 users = [dict(row) for row in rows]
                 return self._json(200, {"users": users})
 
+            if parsed.path == "/api/health":
+                conn = get_conn()
+                conn.execute("SELECT 1").fetchone()
+                conn.close()
+                return self._json(200, {"status": "ok", "database": "connected"})
+
             if parsed.path == "/api/deals":
                 if not self._auth_user():
                     return self._json(401, {"error": "未授權"})
