@@ -1,0 +1,308 @@
+const TOKEN_KEY = 'sales_force_token';
+const SCRIPT_URL_KEY = 'sales_force_script_url';
+const APP_BASE_PATH = window.location.pathname.startsWith('/sales/') ? '/sales' : '';
+
+function appUrl(path) {
+  return `${APP_BASE_PATH}${path}`;
+}
+
+function normalizeBase(url) {
+  return (url || '').trim();
+}
+
+function defaultScriptUrl() {
+  const fromQuery = normalizeBase(new URLSearchParams(window.location.search).get('script'));
+  if (fromQuery) return fromQuery;
+  const fromStorage = normalizeBase(localStorage.getItem(SCRIPT_URL_KEY));
+  if (fromStorage) return fromStorage;
+  return '';
+}
+
+let activeScriptUrl = defaultScriptUrl();
+
+function setScriptUrl(url) {
+  activeScriptUrl = normalizeBase(url);
+  localStorage.setItem(SCRIPT_URL_KEY, activeScriptUrl);
+}
+
+const CHANNEL_PRODUCTS = {
+  Monitor: ['LCD'],
+  EDU: ['IFP', 'PGA'],
+  'Pro AV': ['PJ', 'DvLED', 'CDE']
+};
+
+function getToken() {
+  return sessionStorage.getItem(TOKEN_KEY) || '';
+}
+
+function setToken(token) {
+  sessionStorage.setItem(TOKEN_KEY, token);
+}
+
+function clearToken() {
+  sessionStorage.removeItem(TOKEN_KEY);
+}
+
+async function callScript(action, method = 'GET', payload = null) {
+  if (!activeScriptUrl) throw new Error('請先設定 Google Apps Script Web App URL。');
+  const token = getToken();
+  let url = `${activeScriptUrl}${activeScriptUrl.includes('?') ? '&' : '?'}action=${encodeURIComponent(action)}`;
+  if (token) url += `&token=${encodeURIComponent(token)}`;
+
+  const opts = { method };
+  if (method === 'POST') {
+    opts.headers = { 'Content-Type': 'application/json' };
+    opts.body = JSON.stringify(payload || {});
+  }
+
+  const res = await fetch(url, opts);
+  const text = await res.text();
+  let data = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error('Apps Script 回應不是 JSON，請確認你已部署為 Web App 並開放存取。');
+  }
+  if (!res.ok || data.ok === false) throw new Error(data.error || `API error (${res.status})`);
+  return data;
+}
+
+function initLoginPage() {
+  const loginFormEl = document.getElementById('loginForm');
+  if (!loginFormEl) return;
+
+  const loginUsernameEl = document.getElementById('loginUsername');
+  const loginPasswordEl = document.getElementById('loginPassword');
+  const loginErrorEl = document.getElementById('loginError');
+  const apiStatusEl = document.getElementById('apiStatus');
+  const apiBaseEl = document.getElementById('apiBase');
+  let healthOk = false;
+
+  apiBaseEl.value = activeScriptUrl;
+
+  const checkHealth = async () => {
+    setScriptUrl(apiBaseEl.value);
+    healthOk = false;
+    if (!activeScriptUrl) {
+      apiStatusEl.textContent = '請先填入 Google Apps Script Web App URL。';
+      apiStatusEl.classList.add('status-error');
+      apiStatusEl.classList.remove('status-ok');
+      return;
+    }
+    try {
+      const data = await callScript('health');
+      apiStatusEl.textContent = `系統連線正常：${data.status}（DB: Google Sheet）`;
+      apiStatusEl.classList.add('status-ok');
+      apiStatusEl.classList.remove('status-error');
+      healthOk = true;
+    } catch {
+      apiStatusEl.textContent = '系統連線異常：請確認 Apps Script URL 與部署權限。';
+      apiStatusEl.classList.add('status-error');
+      apiStatusEl.classList.remove('status-ok');
+    }
+  };
+
+  checkHealth();
+  apiBaseEl.addEventListener('change', checkHealth);
+
+  loginFormEl.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    loginErrorEl.textContent = '';
+    await checkHealth();
+    if (!healthOk) {
+      loginErrorEl.textContent = '請先設定可用的 Google Apps Script URL，再登入。';
+      return;
+    }
+    try {
+      const data = await callScript('login', 'POST', {
+        username: loginUsernameEl.value.trim(),
+        password: loginPasswordEl.value
+      });
+      setToken(data.token);
+      window.location.href = appUrl('/dashboard.html');
+    } catch (err) {
+      loginErrorEl.textContent = err.message;
+    }
+  });
+}
+
+async function initDashboardPage() {
+  const dealForm = document.getElementById('dealForm');
+  if (!dealForm) return;
+
+  const currentUserEl = document.getElementById('currentUser');
+  const logoutBtnEl = document.getElementById('logoutBtn');
+  const ownerEl = document.getElementById('owner');
+  const channelEl = document.getElementById('channel');
+  const productEl = document.getElementById('product');
+  const viewOwnerEl = document.getElementById('viewOwner');
+  const viewPeriodEl = document.getElementById('viewPeriod');
+  const viewChannelEl = document.getElementById('viewChannel');
+  const viewProductEl = document.getElementById('viewProduct');
+  const metricCardsEl = document.getElementById('metricCards');
+  const dealRowsEl = document.getElementById('dealRows');
+
+  document.getElementById('expectedDate').valueAsDate = new Date();
+
+  function hydrateSelect(el, list, includeAll = false) {
+    el.innerHTML = '';
+    if (includeAll) el.add(new Option('全部', 'all'));
+    list.forEach((item) => el.add(new Option(item, item)));
+  }
+
+  function updateProductOptions(channelTarget, productTarget) {
+    const products = CHANNEL_PRODUCTS[channelTarget.value] || [];
+    hydrateSelect(productTarget, products);
+  }
+
+  function fmtCurrency(n) {
+    return new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', maximumFractionDigits: 0 }).format(n);
+  }
+
+  function weekOfYear(date) {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  }
+
+  function groupLabel(dateStr, period) {
+    const d = new Date(dateStr);
+    const y = d.getFullYear();
+    if (period === 'week') return `${y}-W${weekOfYear(d)}`;
+    if (period === 'month') return `${y}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    if (period === 'quarter') return `${y}-Q${Math.floor(d.getMonth() / 3) + 1}`;
+    if (period === 'half') return `${y}-H${d.getMonth() < 6 ? 1 : 2}`;
+    if (period === 'year') return `${y}`;
+    return '全部';
+  }
+
+  function renderMetrics(deals) {
+    const totalAmount = deals.reduce((s, d) => s + Number(d.amount || 0), 0);
+    const wonDeals = deals.filter((d) => d.status === '成交');
+    const closedDeals = deals.filter((d) => d.status === '結案');
+    const inProgress = deals.filter((d) => !['成交', '結案'].includes(d.status));
+    const hitRate = deals.length ? (wonDeals.length / deals.length) * 100 : 0;
+
+    const bucket = {};
+    deals.forEach((d) => {
+      const k = groupLabel(d.expectedDate, viewPeriodEl.value);
+      if (!bucket[k]) bucket[k] = 0;
+      bucket[k] += Number(d.amount || 0);
+    });
+
+    const trend = Object.entries(bucket)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => `${k}:${fmtCurrency(v)}`)
+      .join('、') || '無資料';
+
+    metricCardsEl.innerHTML = [
+      ['總成交金額', fmtCurrency(totalAmount), `資料筆數：${deals.length}`],
+      ['Funnel Hit Rate', `${hitRate.toFixed(1)}%`, `成交 ${wonDeals.length} / 全部 ${deals.length}`],
+      ['正在處理案子', `${inProgress.length} 筆`, `成交 ${wonDeals.length}，結案 ${closedDeals.length}`],
+      [`${viewPeriodEl.options[viewPeriodEl.selectedIndex].text} 業績`, trend, '可依業務/Channel/產品切換']
+    ].map(([h, v, s]) => `
+      <article class="metric-card">
+        <h3>${h}</h3>
+        <div class="v">${v}</div>
+        <div class="s">${s}</div>
+      </article>`).join('');
+  }
+
+  function renderTable(deals) {
+    dealRowsEl.innerHTML = deals.map((d) => `
+      <tr>
+        <td>${d.expectedDate}</td>
+        <td>${d.owner}</td>
+        <td>${d.projectName}</td>
+        <td>${d.customerName}</td>
+        <td>${d.channel} / ${d.product}</td>
+        <td>${d.qty}</td>
+        <td>${fmtCurrency(Number(d.amount || 0))}</td>
+        <td>${d.winRate}%</td>
+        <td><span class="status-chip ${d.status}">${d.status}</span></td>
+      </tr>
+    `).join('') || '<tr><td colspan="9">尚無資料</td></tr>';
+  }
+
+  async function fetchDeals() {
+    const data = await callScript('deals');
+    return (data.deals || []).filter((d) => {
+      if (viewOwnerEl.value !== 'all' && d.owner !== viewOwnerEl.value) return false;
+      if (viewChannelEl.value !== 'all' && d.channel !== viewChannelEl.value) return false;
+      if (viewProductEl.value !== 'all' && d.product !== viewProductEl.value) return false;
+      return true;
+    });
+  }
+
+  async function renderAll() {
+    const deals = await fetchDeals();
+    renderMetrics(deals);
+    renderTable(deals);
+  }
+
+  const me = await callScript('me').catch(() => null);
+  if (!me) {
+    window.location.href = appUrl('/');
+    return;
+  }
+  currentUserEl.textContent = `使用者：${me.user.full_name}（${me.user.role}）`;
+
+  const usersData = await callScript('users');
+  const salesMembers = usersData.users.map((u) => u.full_name);
+  hydrateSelect(ownerEl, salesMembers);
+  hydrateSelect(viewOwnerEl, salesMembers, true);
+  ownerEl.value = me.user.full_name;
+  viewOwnerEl.value = 'all';
+
+  hydrateSelect(channelEl, Object.keys(CHANNEL_PRODUCTS));
+  updateProductOptions(channelEl, productEl);
+  channelEl.addEventListener('change', () => updateProductOptions(channelEl, productEl));
+
+  hydrateSelect(viewChannelEl, Object.keys(CHANNEL_PRODUCTS), true);
+  hydrateSelect(viewProductEl, Object.values(CHANNEL_PRODUCTS).flat(), true);
+
+  dealForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const payload = {
+      owner: ownerEl.value,
+      projectName: document.getElementById('projectName').value,
+      customerName: document.getElementById('customerName').value,
+      contactName: document.getElementById('contactName').value,
+      contactPhone: document.getElementById('contactPhone').value,
+      contactEmail: document.getElementById('contactEmail').value,
+      channel: channelEl.value,
+      product: productEl.value,
+      qty: Number(document.getElementById('qty').value),
+      amount: Number(document.getElementById('amount').value),
+      expectedDate: document.getElementById('expectedDate').value,
+      status: document.getElementById('status').value,
+      winRate: Number(document.getElementById('winRate').value),
+      notes: document.getElementById('notes').value
+    };
+
+    try {
+      await callScript('createDeal', 'POST', payload);
+      dealForm.reset();
+      document.getElementById('expectedDate').valueAsDate = new Date();
+      channelEl.value = Object.keys(CHANNEL_PRODUCTS)[0];
+      updateProductOptions(channelEl, productEl);
+      await renderAll();
+    } catch (err) {
+      alert(err.message);
+    }
+  });
+
+  [viewOwnerEl, viewPeriodEl, viewChannelEl, viewProductEl].forEach((el) => el.addEventListener('change', renderAll));
+
+  logoutBtnEl.addEventListener('click', () => {
+    clearToken();
+    window.location.href = appUrl('/');
+  });
+
+  await renderAll();
+}
+
+initLoginPage();
+initDashboardPage();
