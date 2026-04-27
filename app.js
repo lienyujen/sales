@@ -9,6 +9,17 @@ const SALES_MEMBERS = [
   'Yujen Lien'
 ];
 
+const USERS = {
+  Chris: { fullName: 'Chris Wang', password: '12345678', role: 'manager' },
+  Jeffry: { fullName: 'Jeffry Yang', password: '12345678', role: 'manager' },
+  Eason: { fullName: 'Eason Yang', password: '12345678', role: 'manager' },
+  Teddy: { fullName: 'Teddy Wu', password: '12345678', role: 'manager' },
+  Perry: { fullName: 'Perry Wang', password: '12345678', role: 'manager' },
+  Jolin: { fullName: 'Jolin Zuo', password: '12345678', role: 'manager' },
+  Raymond: { fullName: 'Raymond Shen', password: '12345678', role: 'manager' },
+  Yujen: { fullName: 'Yujen Lien', password: '12345678', role: 'manager' }
+};
+
 const CHANNEL_PRODUCTS = {
   Monitor: ['LCD'],
   EDU: ['IFP', 'PGA'],
@@ -16,12 +27,22 @@ const CHANNEL_PRODUCTS = {
 };
 
 const STORAGE_KEY = 'company-sales-force-deals-v1';
+const SESSION_KEY = 'company-sales-force-session-v1';
 
 const seedDeals = [
   { owner: 'Chris Wang', projectName: '屏東IFP', customerName: '屏東教育局', contactName: '屏東人', contactPhone: '', contactEmail: '', channel: 'EDU', product: 'IFP', qty: 10, amount: 5000000, expectedDate: '2026-04-08', status: '成交', winRate: 90, notes: '' },
   { owner: 'Jeffry Yang', projectName: '屏東LCD', customerName: '屏東', contactName: '沈', contactPhone: '', contactEmail: '', channel: 'Monitor', product: 'LCD', qty: 20, amount: 20000000, expectedDate: '2026-01-28', status: '成交', winRate: 80, notes: '' },
   { owner: 'Eason Yang', projectName: '屏東更新', customerName: '屏東', contactName: '沈', contactPhone: '', contactEmail: '', channel: 'EDU', product: 'IFP', qty: 30, amount: 17055998, expectedDate: '2026-01-28', status: '成交', winRate: 85, notes: '' }
 ];
+
+const loginViewEl = document.getElementById('loginView');
+const appViewEl = document.getElementById('appView');
+const loginFormEl = document.getElementById('loginForm');
+const loginUsernameEl = document.getElementById('loginUsername');
+const loginPasswordEl = document.getElementById('loginPassword');
+const loginErrorEl = document.getElementById('loginError');
+const currentUserEl = document.getElementById('currentUser');
+const logoutBtnEl = document.getElementById('logoutBtn');
 
 const ownerEl = document.getElementById('owner');
 const channelEl = document.getElementById('channel');
@@ -46,15 +67,6 @@ function updateProductOptions(channelTarget, productTarget) {
   const products = CHANNEL_PRODUCTS[channelTarget.value] || [];
   hydrateSelect(productTarget, products);
 }
-
-hydrateSelect(ownerEl, SALES_MEMBERS);
-hydrateSelect(channelEl, Object.keys(CHANNEL_PRODUCTS));
-updateProductOptions(channelEl, productEl);
-channelEl.addEventListener('change', () => updateProductOptions(channelEl, productEl));
-
-hydrateSelect(viewOwnerEl, SALES_MEMBERS, true);
-hydrateSelect(viewChannelEl, Object.keys(CHANNEL_PRODUCTS), true);
-hydrateSelect(viewProductEl, Object.values(CHANNEL_PRODUCTS).flat(), true);
 
 function loadDeals() {
   const found = localStorage.getItem(STORAGE_KEY);
@@ -116,6 +128,7 @@ function renderMetrics() {
     if (!bucket[k]) bucket[k] = 0;
     bucket[k] += Number(d.amount || 0);
   });
+
   const trend = Object.entries(bucket)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([k, v]) => `${k}:${fmtCurrency(v)}`)
@@ -156,35 +169,97 @@ function renderAll() {
   renderTable();
 }
 
-formEl.addEventListener('submit', (e) => {
-  e.preventDefault();
-  const data = {
-    owner: ownerEl.value,
-    projectName: document.getElementById('projectName').value,
-    customerName: document.getElementById('customerName').value,
-    contactName: document.getElementById('contactName').value,
-    contactPhone: document.getElementById('contactPhone').value,
-    contactEmail: document.getElementById('contactEmail').value,
-    channel: channelEl.value,
-    product: productEl.value,
-    qty: Number(document.getElementById('qty').value),
-    amount: Number(document.getElementById('amount').value),
-    expectedDate: document.getElementById('expectedDate').value,
-    status: document.getElementById('status').value,
-    winRate: Number(document.getElementById('winRate').value),
-    notes: document.getElementById('notes').value
-  };
-  const deals = loadDeals();
-  deals.unshift(data);
-  saveDeals(deals);
-  formEl.reset();
-  document.getElementById('expectedDate').valueAsDate = new Date();
-  channelEl.value = Object.keys(CHANNEL_PRODUCTS)[0];
+function bindDataEvents() {
+  hydrateSelect(ownerEl, SALES_MEMBERS);
+  hydrateSelect(channelEl, Object.keys(CHANNEL_PRODUCTS));
   updateProductOptions(channelEl, productEl);
-  ownerEl.value = SALES_MEMBERS[0];
+  channelEl.addEventListener('change', () => updateProductOptions(channelEl, productEl));
+
+  hydrateSelect(viewOwnerEl, SALES_MEMBERS, true);
+  hydrateSelect(viewChannelEl, Object.keys(CHANNEL_PRODUCTS), true);
+  hydrateSelect(viewProductEl, Object.values(CHANNEL_PRODUCTS).flat(), true);
+
+  formEl.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const data = {
+      owner: ownerEl.value,
+      projectName: document.getElementById('projectName').value,
+      customerName: document.getElementById('customerName').value,
+      contactName: document.getElementById('contactName').value,
+      contactPhone: document.getElementById('contactPhone').value,
+      contactEmail: document.getElementById('contactEmail').value,
+      channel: channelEl.value,
+      product: productEl.value,
+      qty: Number(document.getElementById('qty').value),
+      amount: Number(document.getElementById('amount').value),
+      expectedDate: document.getElementById('expectedDate').value,
+      status: document.getElementById('status').value,
+      winRate: Number(document.getElementById('winRate').value),
+      notes: document.getElementById('notes').value
+    };
+    const deals = loadDeals();
+    deals.unshift(data);
+    saveDeals(deals);
+    formEl.reset();
+    document.getElementById('expectedDate').valueAsDate = new Date();
+    channelEl.value = Object.keys(CHANNEL_PRODUCTS)[0];
+    updateProductOptions(channelEl, productEl);
+    renderAll();
+  });
+
+  [viewOwnerEl, viewPeriodEl, viewChannelEl, viewProductEl].forEach((el) => {
+    el.addEventListener('change', renderAll);
+  });
+}
+
+function showApp(session) {
+  loginViewEl.classList.add('hidden');
+  appViewEl.classList.remove('hidden');
+  currentUserEl.textContent = `使用者：${session.fullName}（${session.role}）`;
+  ownerEl.value = session.fullName;
+  viewOwnerEl.value = 'all';
   renderAll();
+}
+
+function showLogin() {
+  appViewEl.classList.add('hidden');
+  loginViewEl.classList.remove('hidden');
+}
+
+function startSession(username) {
+  const user = USERS[username];
+  const session = { username, fullName: user.fullName, role: user.role };
+  sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  showApp(session);
+}
+
+function initAuth() {
+  const currentSession = sessionStorage.getItem(SESSION_KEY);
+  if (currentSession) {
+    showApp(JSON.parse(currentSession));
+    return;
+  }
+  showLogin();
+}
+
+loginFormEl.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const username = loginUsernameEl.value.trim();
+  const password = loginPasswordEl.value;
+  const found = USERS[username];
+  if (!found || found.password !== password) {
+    loginErrorEl.textContent = '帳號或密碼錯誤，請確認帳號為名字（不含姓）。';
+    return;
+  }
+  loginErrorEl.textContent = '';
+  loginFormEl.reset();
+  startSession(username);
 });
 
-[viewOwnerEl, viewPeriodEl, viewChannelEl, viewProductEl].forEach((el) => el.addEventListener('change', renderAll));
+logoutBtnEl.addEventListener('click', () => {
+  sessionStorage.removeItem(SESSION_KEY);
+  showLogin();
+});
 
-renderAll();
+bindDataEvents();
+initAuth();

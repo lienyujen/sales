@@ -7,119 +7,142 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <header class="topbar">
-      <div>
-        <h1>Sales Funnel Monitor（公司版）</h1>
-        <p>支援業務別 / 全體 / Channel / 產品 / 期間績效追蹤</p>
-      </div>
-    </header>
-
-    <main class="container">
-      <section class="card">
-        <h2>新增案源（New Opportunity）</h2>
-        <form id="dealForm" class="form-grid">
-          <label>業務
-            <select id="owner" required></select>
+    <section id="loginView" class="login-wrap">
+      <article class="login-card">
+        <h1>Company Sales Force 登入</h1>
+        <p>帳號為名字（不含姓），預設密碼為 12345678。</p>
+        <form id="loginForm" class="login-form">
+          <label>帳號
+            <input id="loginUsername" required placeholder="例如：Chris" />
           </label>
-          <label>專案名稱
-            <input id="projectName" required placeholder="輸入專案名稱" />
+          <label>密碼
+            <input id="loginPassword" type="password" required placeholder="12345678" />
           </label>
-          <label>客戶單位
-            <input id="customerName" required placeholder="輸入客戶單位" />
-          </label>
-          <label>客戶姓名
-            <input id="contactName" placeholder="輸入客戶姓名" />
-          </label>
-          <label>客戶電話
-            <input id="contactPhone" placeholder="輸入電話" />
-          </label>
-          <label>客戶信箱
-            <input id="contactEmail" placeholder="輸入信箱" />
-          </label>
-          <label>Channel
-            <select id="channel" required></select>
-          </label>
-          <label>產品
-            <select id="product" required></select>
-          </label>
-          <label>數量
-            <input id="qty" type="number" min="1" value="1" required />
-          </label>
-          <label>金額（NTD）
-            <input id="amount" type="number" min="0" value="0" required />
-          </label>
-          <label>預計成交日
-            <input id="expectedDate" type="date" required />
-          </label>
-          <label>目前狀態
-            <select id="status" required>
-              <option value="初步接觸">初步接觸</option>
-              <option value="需求確認">需求確認</option>
-              <option value="提案中">提案中</option>
-              <option value="議價中">議價中</option>
-              <option value="成交">成交</option>
-              <option value="結案">結案</option>
-            </select>
-          </label>
-          <label>Win Rate（%）
-            <input id="winRate" type="number" min="0" max="100" value="50" required />
-          </label>
-          <label class="full">備註
-            <textarea id="notes" rows="2" placeholder="客戶需求與備註"></textarea>
-          </label>
-          <button type="submit" class="btn-primary full">儲存並上傳</button>
+          <button type="submit" class="btn-primary">登入系統</button>
+          <p id="loginError" class="error-text"></p>
         </form>
-      </section>
+      </article>
+    </section>
 
-      <section class="card">
-        <h2>分析篩選</h2>
-        <div class="filters">
-          <label>業務
-            <select id="viewOwner"></select>
-          </label>
-          <label>期間
-            <select id="viewPeriod">
-              <option value="all">全部</option>
-              <option value="week">每週</option>
-              <option value="month">每月</option>
-              <option value="quarter">每季</option>
-              <option value="half">每半年</option>
-              <option value="year">每年</option>
-            </select>
-          </label>
-          <label>Channel
-            <select id="viewChannel"></select>
-          </label>
-          <label>產品
-            <select id="viewProduct"></select>
-          </label>
+    <div id="appView" class="hidden">
+      <header class="topbar">
+        <div>
+          <h1>Sales Funnel Monitor（公司版）</h1>
+          <p>支援業務別 / 全體 / Channel / 產品 / 期間績效追蹤</p>
         </div>
-      </section>
-
-      <section class="metrics-grid" id="metricCards"></section>
-
-      <section class="card">
-        <h2>案源明細列表</h2>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>預計成交日</th>
-                <th>業務</th>
-                <th>專案</th>
-                <th>客戶</th>
-                <th>Channel / 產品</th>
-                <th>數量</th>
-                <th>金額 (NTD)</th>
-                <th>Win Rate</th>
-                <th>狀態</th>
-              </tr>
-            </thead>
-            <tbody id="dealRows"></tbody>
-          </table>
+        <div class="session-block">
+          <span id="currentUser"></span>
+          <button id="logoutBtn" class="btn-secondary">登出</button>
         </div>
-      </section>
-    </main>
+      </header>
+
+      <main class="container">
+        <section class="card">
+          <h2>新增案源（New Opportunity）</h2>
+          <form id="dealForm" class="form-grid">
+            <label>業務
+              <select id="owner" required></select>
+            </label>
+            <label>專案名稱
+              <input id="projectName" required placeholder="輸入專案名稱" />
+            </label>
+            <label>客戶單位
+              <input id="customerName" required placeholder="輸入客戶單位" />
+            </label>
+            <label>客戶姓名
+              <input id="contactName" placeholder="輸入客戶姓名" />
+            </label>
+            <label>客戶電話
+              <input id="contactPhone" placeholder="輸入電話" />
+            </label>
+            <label>客戶信箱
+              <input id="contactEmail" placeholder="輸入信箱" />
+            </label>
+            <label>Channel
+              <select id="channel" required></select>
+            </label>
+            <label>產品
+              <select id="product" required></select>
+            </label>
+            <label>數量
+              <input id="qty" type="number" min="1" value="1" required />
+            </label>
+            <label>金額（NTD）
+              <input id="amount" type="number" min="0" value="0" required />
+            </label>
+            <label>預計成交日
+              <input id="expectedDate" type="date" required />
+            </label>
+            <label>目前狀態
+              <select id="status" required>
+                <option value="初步接觸">初步接觸</option>
+                <option value="需求確認">需求確認</option>
+                <option value="提案中">提案中</option>
+                <option value="議價中">議價中</option>
+                <option value="成交">成交</option>
+                <option value="結案">結案</option>
+              </select>
+            </label>
+            <label>Win Rate（%）
+              <input id="winRate" type="number" min="0" max="100" value="50" required />
+            </label>
+            <label class="full">備註
+              <textarea id="notes" rows="2" placeholder="客戶需求與備註"></textarea>
+            </label>
+            <button type="submit" class="btn-primary full">儲存並上傳</button>
+          </form>
+        </section>
+
+        <section class="card">
+          <h2>分析篩選</h2>
+          <div class="filters">
+            <label>業務
+              <select id="viewOwner"></select>
+            </label>
+            <label>期間
+              <select id="viewPeriod">
+                <option value="all">全部</option>
+                <option value="week">每週</option>
+                <option value="month">每月</option>
+                <option value="quarter">每季</option>
+                <option value="half">每半年</option>
+                <option value="year">每年</option>
+              </select>
+            </label>
+            <label>Channel
+              <select id="viewChannel"></select>
+            </label>
+            <label>產品
+              <select id="viewProduct"></select>
+            </label>
+          </div>
+        </section>
+
+        <section class="metrics-grid" id="metricCards"></section>
+
+        <section class="card">
+          <h2>案源明細列表</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>預計成交日</th>
+                  <th>業務</th>
+                  <th>專案</th>
+                  <th>客戶</th>
+                  <th>Channel / 產品</th>
+                  <th>數量</th>
+                  <th>金額 (NTD)</th>
+                  <th>Win Rate</th>
+                  <th>狀態</th>
+                </tr>
+              </thead>
+              <tbody id="dealRows"></tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
 
     <script src="app.js"></script>
   </body>
