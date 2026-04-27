@@ -99,6 +99,11 @@ def init_db():
 
 
 class Handler(BaseHTTPRequestHandler):
+    def _send_cors(self):
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+
     def _auth_user(self):
         auth = self.headers.get("Authorization", "")
         if not auth.startswith("Bearer "):
@@ -118,10 +123,16 @@ class Handler(BaseHTTPRequestHandler):
     def _json(self, status, payload):
         body = json.dumps(payload).encode("utf-8")
         self.send_response(status)
+        self._send_cors()
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self._send_cors()
+        self.end_headers()
 
     def _read_json(self):
         length = int(self.headers.get("Content-Length", "0"))

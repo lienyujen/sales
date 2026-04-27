@@ -1,4 +1,11 @@
 const TOKEN_KEY = 'sales_force_token';
+const API_BASE_CANDIDATES = Array.from(new Set([
+  (window.__API_BASE__ || '').replace(/\/$/, ''),
+  '',
+  'http://localhost:8080'
+])).filter((v, i) => (i === 0 ? true : v !== ''));
+
+let activeApiBase = API_BASE_CANDIDATES[0] || '';
 
 const CHANNEL_PRODUCTS = {
   Monitor: ['LCD'],
@@ -22,17 +29,33 @@ async function api(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
+  const bases = [activeApiBase, ...API_BASE_CANDIDATES].filter((v, i, arr) => arr.indexOf(v) === i);
+  let lastError = null;
 
-  const res = await fetch(path, { ...options, headers });
-  const text = await res.text();
-  let data = {};
-  try {
-    data = text ? JSON.parse(text) : {};
-  } catch {
-    throw new Error(`API 回應不是 JSON（${res.status}）。請確認後端 server.py 正在執行且 /api 路由可用。`);
+  for (const base of bases) {
+    const url = `${base}${path}`;
+    try {
+      const res = await fetch(url, { ...options, headers });
+      const text = await res.text();
+      let data = {};
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        lastError = new Error(`API 回應不是 JSON（${res.status}，${url}）。`);
+        continue;
+      }
+      if (!res.ok) {
+        lastError = new Error(data.error || `API error (${res.status})`);
+        if (res.status >= 500 || res.status === 404) continue;
+        throw lastError;
+      }
+      activeApiBase = base;
+      return data;
+    } catch (err) {
+      lastError = err;
+    }
   }
-  if (!res.ok) throw new Error(data.error || `API error (${res.status})`);
-  return data;
+  throw lastError || new Error('無法連接後端 API，請確認 server.py 已啟動。');
 }
 
 function initLoginPage() {

@@ -49,3 +49,5 @@ python3 server.py
 ```
 
 Open: `http://localhost:8080`
+
+> Frontend API calls will auto-fallback to `http://localhost:8080` if current origin has no `/api` route.
