@@ -1,6 +1,15 @@
 # Company Sales Force Dashboard
 
-A lightweight single-page sales-force tracker for internal use.
+A lightweight sales-force tracker for internal use.
+
+## Key update (Database-backed)
+
+- Opportunity records are now stored in **SQLite database** (`sales.db`), not in session/localStorage.
+- Includes backend APIs for login and deal CRUD-lite flows:
+  - `POST /api/login`
+  - `GET /api/users`
+  - `GET /api/deals`
+  - `POST /api/deals`
 
 ## Included requirements
 
@@ -9,11 +18,10 @@ A lightweight single-page sales-force tracker for internal use.
   - Monitor → LCD
   - EDU → IFP, PGA
   - Pro AV → PJ, DvLED, CDE
+- Home page opens with login first; after login users can view all sales data.
 - New opportunity entry form for sales to key in all projects.
 - Funnel / hit-rate / deal amount / in-progress count metrics.
 - Filtering by owner, channel, product, and period (week/month/quarter/half/year/all).
-- Opportunity detail table for tracking.
-- Home page always opens with login first; dashboard becomes visible only after successful sign-in.
 
 ## Login accounts
 
@@ -31,14 +39,10 @@ A lightweight single-page sales-force tracker for internal use.
 | Raymond Shen | Raymond | 12345678 |
 | Yujen Lien | Yujen | 12345678 |
 
-## Run / Publish
-
-For immediate internal use, run a local server:
+## Run
 
 ```bash
-python3 -m http.server 8080
+python3 server.py
 ```
 
-Then open:
-
-- `http://localhost:8080/index.html`
+Open: `http://localhost:8080`
