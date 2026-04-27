@@ -23,6 +23,15 @@ function setApiBase(base) {
   localStorage.setItem(API_BASE_KEY, activeApiBase);
 }
 
+function isGithubPagesBase(base) {
+  try {
+    const host = new URL(base).hostname;
+    return host.endsWith('github.io');
+  } catch {
+    return false;
+  }
+}
+
 const CHANNEL_PRODUCTS = {
   Monitor: ['LCD'],
   EDU: ['IFP', 'PGA'],
@@ -83,31 +92,49 @@ function initLoginPage() {
   const loginErrorEl = document.getElementById('loginError');
   const apiStatusEl = document.getElementById('apiStatus');
   const apiBaseEl = document.getElementById('apiBase');
+  let healthOk = false;
 
   apiBaseEl.value = activeApiBase;
 
-  const checkHealth = () => api('/api/health')
-    .then((data) => {
+  const checkHealth = async () => {
+    const inputBase = normalizeBase(apiBaseEl.value);
+    setApiBase(inputBase);
+    healthOk = false;
+    loginErrorEl.textContent = '';
+
+    if (isGithubPagesBase(inputBase)) {
+      apiStatusEl.textContent = '系統連線異常：GitHub Pages 只能放前端，不能當 API 伺服器。';
+      apiStatusEl.classList.add('status-error');
+      apiStatusEl.classList.remove('status-ok');
+      return;
+    }
+
+    try {
+      const data = await api('/api/health');
       apiStatusEl.textContent = `系統連線正常：${data.status}（DB: ${data.database}）`;
       apiStatusEl.classList.add('status-ok');
       apiStatusEl.classList.remove('status-error');
-    })
-    .catch(() => {
-      apiStatusEl.textContent = '系統連線異常：請確認 API 伺服器網址可連線。';
+      healthOk = true;
+    } catch {
+      apiStatusEl.textContent = '系統連線異常：請確認 API 網址是後端服務（非 github.io）且可連線。';
       apiStatusEl.classList.add('status-error');
       apiStatusEl.classList.remove('status-ok');
-    });
+    }
+  };
   checkHealth();
 
   apiBaseEl.addEventListener('change', () => {
-    setApiBase(apiBaseEl.value);
     checkHealth();
   });
 
   loginFormEl.addEventListener('submit', async (e) => {
     e.preventDefault();
     try {
-      setApiBase(apiBaseEl.value);
+      await checkHealth();
+      if (!healthOk) {
+        loginErrorEl.textContent = '請先設定可用的後端 API 伺服器網址，再登入。';
+        return;
+      }
       const data = await api('/api/login', {
         method: 'POST',
         body: JSON.stringify({
