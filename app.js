@@ -24,8 +24,14 @@ async function api(path, options = {}) {
   if (token) headers.Authorization = `Bearer ${token}`;
 
   const res = await fetch(path, { ...options, headers });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'API error');
+  const text = await res.text();
+  let data = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error(`API 回應不是 JSON（${res.status}）。請確認後端 server.py 正在執行且 /api 路由可用。`);
+  }
+  if (!res.ok) throw new Error(data.error || `API error (${res.status})`);
   return data;
 }
 

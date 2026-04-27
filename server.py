@@ -129,133 +129,139 @@ class Handler(BaseHTTPRequestHandler):
         return json.loads(data.decode("utf-8"))
 
     def do_GET(self):
-        parsed = urlparse(self.path)
+        try:
+            parsed = urlparse(self.path)
 
-        if parsed.path == "/api/users":
-            if not self._auth_user():
-                return self._json(401, {"error": "未授權"})
-            conn = get_conn()
-            rows = conn.execute("SELECT username, full_name, role FROM users ORDER BY full_name").fetchall()
-            conn.close()
-            users = [dict(row) for row in rows]
-            return self._json(200, {"users": users})
+            if parsed.path == "/api/users":
+                if not self._auth_user():
+                    return self._json(401, {"error": "未授權"})
+                conn = get_conn()
+                rows = conn.execute("SELECT username, full_name, role FROM users ORDER BY full_name").fetchall()
+                conn.close()
+                users = [dict(row) for row in rows]
+                return self._json(200, {"users": users})
 
-        if parsed.path == "/api/deals":
-            if not self._auth_user():
-                return self._json(401, {"error": "未授權"})
-            qs = parse_qs(parsed.query)
-            owner = qs.get("owner", ["all"])[0]
-            channel = qs.get("channel", ["all"])[0]
-            product = qs.get("product", ["all"])[0]
-            query = "SELECT * FROM deals WHERE 1=1"
-            params = []
-            if owner != "all":
-                query += " AND owner = ?"
-                params.append(owner)
-            if channel != "all":
-                query += " AND channel = ?"
-                params.append(channel)
-            if product != "all":
-                query += " AND product = ?"
-                params.append(product)
-            query += " ORDER BY expected_date DESC, id DESC"
+            if parsed.path == "/api/deals":
+                if not self._auth_user():
+                    return self._json(401, {"error": "未授權"})
+                qs = parse_qs(parsed.query)
+                owner = qs.get("owner", ["all"])[0]
+                channel = qs.get("channel", ["all"])[0]
+                product = qs.get("product", ["all"])[0]
+                query = "SELECT * FROM deals WHERE 1=1"
+                params = []
+                if owner != "all":
+                    query += " AND owner = ?"
+                    params.append(owner)
+                if channel != "all":
+                    query += " AND channel = ?"
+                    params.append(channel)
+                if product != "all":
+                    query += " AND product = ?"
+                    params.append(product)
+                query += " ORDER BY expected_date DESC, id DESC"
 
-            conn = get_conn()
-            rows = conn.execute(query, params).fetchall()
-            conn.close()
-            deals = []
-            for row in rows:
-                item = dict(row)
-                item["projectName"] = item.pop("project_name")
-                item["customerName"] = item.pop("customer_name")
-                item["contactName"] = item.pop("contact_name")
-                item["contactPhone"] = item.pop("contact_phone")
-                item["contactEmail"] = item.pop("contact_email")
-                item["expectedDate"] = item.pop("expected_date")
-                item["winRate"] = item.pop("win_rate")
-                deals.append(item)
-            return self._json(200, {"deals": deals})
+                conn = get_conn()
+                rows = conn.execute(query, params).fetchall()
+                conn.close()
+                deals = []
+                for row in rows:
+                    item = dict(row)
+                    item["projectName"] = item.pop("project_name")
+                    item["customerName"] = item.pop("customer_name")
+                    item["contactName"] = item.pop("contact_name")
+                    item["contactPhone"] = item.pop("contact_phone")
+                    item["contactEmail"] = item.pop("contact_email")
+                    item["expectedDate"] = item.pop("expected_date")
+                    item["winRate"] = item.pop("win_rate")
+                    deals.append(item)
+                return self._json(200, {"deals": deals})
 
-        if parsed.path == "/api/me":
-            user = self._auth_user()
-            if not user:
-                return self._json(401, {"error": "未授權"})
-            return self._json(200, {"user": user})
+            if parsed.path == "/api/me":
+                user = self._auth_user()
+                if not user:
+                    return self._json(401, {"error": "未授權"})
+                return self._json(200, {"user": user})
 
-        path = ROOT / ("index.html" if parsed.path == "/" else parsed.path.lstrip("/"))
-        if path.exists() and path.is_file():
-            data = path.read_bytes()
-            self.send_response(200)
-            self.send_header("Content-Type", MIME.get(path.suffix, "application/octet-stream"))
-            self.send_header("Content-Length", str(len(data)))
-            self.end_headers()
-            self.wfile.write(data)
-            return
+            path = ROOT / ("index.html" if parsed.path == "/" else parsed.path.lstrip("/"))
+            if path.exists() and path.is_file():
+                data = path.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", MIME.get(path.suffix, "application/octet-stream"))
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+                return
 
-        self._json(404, {"error": "Not found"})
+            self._json(404, {"error": "Not found"})
+        except Exception as err:
+            self._json(500, {"error": f"Server error: {err}"})
 
     def do_POST(self):
-        parsed = urlparse(self.path)
-        if parsed.path == "/api/login":
-            body = self._read_json()
-            username = body.get("username", "").strip()
-            password = body.get("password", "")
-            conn = get_conn()
-            row = conn.execute(
-                "SELECT username, full_name, role FROM users WHERE lower(username) = lower(?) AND password = ?",
-                (username, password),
-            ).fetchone()
-            conn.close()
-            if not row:
-                return self._json(401, {"error": "帳號或密碼錯誤"})
-            token = secrets.token_urlsafe(32)
-            user = dict(row)
-            SESSIONS[token] = user["username"]
-            return self._json(200, {"user": user, "token": token})
+        try:
+            parsed = urlparse(self.path)
+            if parsed.path == "/api/login":
+                body = self._read_json()
+                username = body.get("username", "").strip()
+                password = body.get("password", "")
+                conn = get_conn()
+                row = conn.execute(
+                    "SELECT username, full_name, role FROM users WHERE lower(username) = lower(?) AND password = ?",
+                    (username, password),
+                ).fetchone()
+                conn.close()
+                if not row:
+                    return self._json(401, {"error": "帳號或密碼錯誤"})
+                token = secrets.token_urlsafe(32)
+                user = dict(row)
+                SESSIONS[token] = user["username"]
+                return self._json(200, {"user": user, "token": token})
 
-        if parsed.path == "/api/deals":
-            if not self._auth_user():
-                return self._json(401, {"error": "未授權"})
-            body = self._read_json()
-            required = [
-                "owner", "projectName", "customerName", "channel", "product",
-                "qty", "amount", "expectedDate", "status", "winRate",
-            ]
-            for field in required:
-                if field not in body or body[field] in ("", None):
-                    return self._json(400, {"error": f"缺少欄位: {field}"})
+            if parsed.path == "/api/deals":
+                if not self._auth_user():
+                    return self._json(401, {"error": "未授權"})
+                body = self._read_json()
+                required = [
+                    "owner", "projectName", "customerName", "channel", "product",
+                    "qty", "amount", "expectedDate", "status", "winRate",
+                ]
+                for field in required:
+                    if field not in body or body[field] in ("", None):
+                        return self._json(400, {"error": f"缺少欄位: {field}"})
 
-            conn = get_conn()
-            conn.execute(
-                """
-                INSERT INTO deals(
-                    owner, project_name, customer_name, contact_name, contact_phone, contact_email,
-                    channel, product, qty, amount, expected_date, status, win_rate, notes, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    body["owner"],
-                    body["projectName"],
-                    body["customerName"],
-                    body.get("contactName", ""),
-                    body.get("contactPhone", ""),
-                    body.get("contactEmail", ""),
-                    body["channel"],
-                    body["product"],
-                    int(body["qty"]),
-                    int(body["amount"]),
-                    body["expectedDate"],
-                    body["status"],
-                    int(body["winRate"]),
-                    body.get("notes", ""),
-                    date.today().isoformat(),
-                ),
-            )
-            conn.commit()
-            conn.close()
-            return self._json(201, {"ok": True})
+                conn = get_conn()
+                conn.execute(
+                    """
+                    INSERT INTO deals(
+                        owner, project_name, customer_name, contact_name, contact_phone, contact_email,
+                        channel, product, qty, amount, expected_date, status, win_rate, notes, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        body["owner"],
+                        body["projectName"],
+                        body["customerName"],
+                        body.get("contactName", ""),
+                        body.get("contactPhone", ""),
+                        body.get("contactEmail", ""),
+                        body["channel"],
+                        body["product"],
+                        int(body["qty"]),
+                        int(body["amount"]),
+                        body["expectedDate"],
+                        body["status"],
+                        int(body["winRate"]),
+                        body.get("notes", ""),
+                        date.today().isoformat(),
+                    ),
+                )
+                conn.commit()
+                conn.close()
+                return self._json(201, {"ok": True})
 
-        self._json(404, {"error": "Not found"})
+            self._json(404, {"error": "Not found"})
+        except Exception as err:
+            self._json(500, {"error": f"Server error: {err}"})
 
 
 def main():
