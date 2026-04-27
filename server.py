@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import json
 import sqlite3
+import secrets
 from datetime import date
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -32,6 +33,7 @@ MIME = {
     ".css": "text/css; charset=utf-8",
     ".json": "application/json; charset=utf-8",
 }
+SESSIONS = {}
 
 
 def get_conn():
@@ -97,6 +99,22 @@ def init_db():
 
 
 class Handler(BaseHTTPRequestHandler):
+    def _auth_user(self):
+        auth = self.headers.get("Authorization", "")
+        if not auth.startswith("Bearer "):
+            return None
+        token = auth.replace("Bearer ", "", 1).strip()
+        username = SESSIONS.get(token)
+        if not username:
+            return None
+        conn = get_conn()
+        row = conn.execute(
+            "SELECT username, full_name, role FROM users WHERE username = ?",
+            (username,),
+        ).fetchone()
+        conn.close()
+        return dict(row) if row else None
+
     def _json(self, status, payload):
         body = json.dumps(payload).encode("utf-8")
         self.send_response(status)
@@ -114,6 +132,8 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
 
         if parsed.path == "/api/users":
+            if not self._auth_user():
+                return self._json(401, {"error": "未授權"})
             conn = get_conn()
             rows = conn.execute("SELECT username, full_name, role FROM users ORDER BY full_name").fetchall()
             conn.close()
@@ -121,6 +141,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, {"users": users})
 
         if parsed.path == "/api/deals":
+            if not self._auth_user():
+                return self._json(401, {"error": "未授權"})
             qs = parse_qs(parsed.query)
             owner = qs.get("owner", ["all"])[0]
             channel = qs.get("channel", ["all"])[0]
@@ -154,6 +176,12 @@ class Handler(BaseHTTPRequestHandler):
                 deals.append(item)
             return self._json(200, {"deals": deals})
 
+        if parsed.path == "/api/me":
+            user = self._auth_user()
+            if not user:
+                return self._json(401, {"error": "未授權"})
+            return self._json(200, {"user": user})
+
         path = ROOT / ("index.html" if parsed.path == "/" else parsed.path.lstrip("/"))
         if path.exists() and path.is_file():
             data = path.read_bytes()
@@ -174,15 +202,20 @@ class Handler(BaseHTTPRequestHandler):
             password = body.get("password", "")
             conn = get_conn()
             row = conn.execute(
-                "SELECT username, full_name, role FROM users WHERE username = ? AND password = ?",
+                "SELECT username, full_name, role FROM users WHERE lower(username) = lower(?) AND password = ?",
                 (username, password),
             ).fetchone()
             conn.close()
             if not row:
                 return self._json(401, {"error": "帳號或密碼錯誤"})
-            return self._json(200, {"user": dict(row)})
+            token = secrets.token_urlsafe(32)
+            user = dict(row)
+            SESSIONS[token] = user["username"]
+            return self._json(200, {"user": user, "token": token})
 
         if parsed.path == "/api/deals":
+            if not self._auth_user():
+                return self._json(401, {"error": "未授權"})
             body = self._read_json()
             required = [
                 "owner", "projectName", "customerName", "channel", "product",
