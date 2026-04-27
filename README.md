@@ -50,4 +50,7 @@ python3 server.py
 
 Open: `http://localhost:8080`
 
-> Frontend API calls will auto-fallback to `http://localhost:8080` if current origin has no `/api` route.
+## GitHub Pages deployment note
+
+- If frontend is hosted on `https://lienyujen.github.io/sales/`, set **API 伺服器網址** on the login page to your backend domain (for example `https://your-backend-domain.com`).
+- The frontend will call `${API_BASE}/api/*` endpoints using that configured base.

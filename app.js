@@ -1,11 +1,27 @@
 const TOKEN_KEY = 'sales_force_token';
-const API_BASE_CANDIDATES = Array.from(new Set([
-  (window.__API_BASE__ || '').replace(/\/$/, ''),
-  '',
-  'http://localhost:8080'
-])).filter((v, i) => (i === 0 ? true : v !== ''));
+const API_BASE_KEY = 'sales_force_api_base';
 
-let activeApiBase = API_BASE_CANDIDATES[0] || '';
+function normalizeBase(url) {
+  return (url || '').trim().replace(/\/$/, '');
+}
+
+function defaultApiBase() {
+  const fromWindow = normalizeBase(window.__API_BASE__);
+  if (fromWindow) return fromWindow;
+  const fromStorage = normalizeBase(localStorage.getItem(API_BASE_KEY));
+  if (fromStorage) return fromStorage;
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return `${window.location.protocol}//${window.location.hostname}:8080`;
+  }
+  return `${window.location.protocol}//${window.location.host}`;
+}
+
+let activeApiBase = defaultApiBase();
+
+function setApiBase(base) {
+  activeApiBase = normalizeBase(base);
+  localStorage.setItem(API_BASE_KEY, activeApiBase);
+}
 
 const CHANNEL_PRODUCTS = {
   Monitor: ['LCD'],
@@ -29,11 +45,11 @@ async function api(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
-  const bases = [activeApiBase, ...API_BASE_CANDIDATES].filter((v, i, arr) => arr.indexOf(v) === i);
+  const bases = [activeApiBase].filter(Boolean);
   let lastError = null;
 
   for (const base of bases) {
-    const url = `${base}${path}`;
+      const url = `${normalizeBase(base)}${path}`;
     try {
       const res = await fetch(url, { ...options, headers });
       const text = await res.text();
@@ -55,7 +71,7 @@ async function api(path, options = {}) {
       lastError = err;
     }
   }
-  throw lastError || new Error('無法連接後端 API，請確認 server.py 已啟動。');
+  throw lastError || new Error('無法連接後端 API，請確認 API 伺服器網址設定正確。');
 }
 
 function initLoginPage() {
@@ -66,20 +82,32 @@ function initLoginPage() {
   const loginPasswordEl = document.getElementById('loginPassword');
   const loginErrorEl = document.getElementById('loginError');
   const apiStatusEl = document.getElementById('apiStatus');
+  const apiBaseEl = document.getElementById('apiBase');
 
-  api('/api/health')
+  apiBaseEl.value = activeApiBase;
+
+  const checkHealth = () => api('/api/health')
     .then((data) => {
       apiStatusEl.textContent = `系統連線正常：${data.status}（DB: ${data.database}）`;
       apiStatusEl.classList.add('status-ok');
+      apiStatusEl.classList.remove('status-error');
     })
     .catch(() => {
-      apiStatusEl.textContent = '系統連線異常：無法連接後端服務，請確認 server.py 已啟動。';
+      apiStatusEl.textContent = '系統連線異常：請確認 API 伺服器網址可連線。';
       apiStatusEl.classList.add('status-error');
+      apiStatusEl.classList.remove('status-ok');
     });
+  checkHealth();
+
+  apiBaseEl.addEventListener('change', () => {
+    setApiBase(apiBaseEl.value);
+    checkHealth();
+  });
 
   loginFormEl.addEventListener('submit', async (e) => {
     e.preventDefault();
     try {
+      setApiBase(apiBaseEl.value);
       const data = await api('/api/login', {
         method: 'POST',
         body: JSON.stringify({
