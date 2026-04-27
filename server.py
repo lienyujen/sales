@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+import os
 import sqlite3
 import secrets
 from datetime import date
@@ -283,8 +284,9 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     init_db()
-    server = HTTPServer(("0.0.0.0", 8080), Handler)
-    print("Server running at http://localhost:8080")
+    port = int(os.getenv("PORT", "8080"))
+    server = HTTPServer(("0.0.0.0", port), Handler)
+    print(f"Server running at http://localhost:{port}")
     server.serve_forever()
 
 

@@ -11,6 +11,8 @@ function normalizeBase(url) {
 }
 
 function defaultApiBase() {
+  const fromQuery = normalizeBase(new URLSearchParams(window.location.search).get('api'));
+  if (fromQuery) return fromQuery;
   const fromWindow = normalizeBase(window.__API_BASE__);
   if (fromWindow) return fromWindow;
   const fromStorage = normalizeBase(localStorage.getItem(API_BASE_KEY));

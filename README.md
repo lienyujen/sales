@@ -56,3 +56,13 @@ Open: `http://localhost:8080`
 - The frontend will call `${API_BASE}/api/*` endpoints using that configured base.
 - `https://lienyujen.github.io` itself is static hosting and cannot serve `POST /api/login` or DB APIs.
 - GitHub Pages deploys from the configured source branch (usually `main`). Ensure your latest commits are merged into that branch before checking the live site.
+- You can prefill API base by opening: `https://lienyujen.github.io/sales/?api=https://your-backend-domain.com`
+
+## Quick backend deploy (Render Blueprint)
+
+This repo includes `render.yaml`. After connecting this GitHub repo in Render, Render can create `sales-api` directly.
+
+1. Create a new Render Blueprint from this repository.
+2. Deploy service `sales-api`.
+3. Copy the generated URL (for example `https://sales-api.onrender.com`).
+4. Open `https://lienyujen.github.io/sales/?api=<YOUR_API_URL>` and log in.
