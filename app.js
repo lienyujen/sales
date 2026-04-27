@@ -1,5 +1,10 @@
 const TOKEN_KEY = 'sales_force_token';
 const API_BASE_KEY = 'sales_force_api_base';
+const APP_BASE_PATH = window.location.pathname.startsWith('/sales/') ? '/sales' : '';
+
+function appUrl(path) {
+  return `${APP_BASE_PATH}${path}`;
+}
 
 function normalizeBase(url) {
   return (url || '').trim().replace(/\/$/, '');
@@ -13,7 +18,7 @@ function defaultApiBase() {
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
     return `${window.location.protocol}//${window.location.hostname}:8080`;
   }
-  return `${window.location.protocol}//${window.location.host}`;
+  return '';
 }
 
 let activeApiBase = defaultApiBase();
@@ -108,6 +113,12 @@ function initLoginPage() {
       apiStatusEl.classList.remove('status-ok');
       return;
     }
+    if (!inputBase) {
+      apiStatusEl.textContent = '請先填入後端 API 伺服器網址。';
+      apiStatusEl.classList.add('status-error');
+      apiStatusEl.classList.remove('status-ok');
+      return;
+    }
 
     try {
       const data = await api('/api/health');
@@ -143,7 +154,7 @@ function initLoginPage() {
         })
       });
       setToken(data.token);
-      window.location.href = '/dashboard.html';
+      window.location.href = appUrl('/dashboard.html');
     } catch (err) {
       loginErrorEl.textContent = err.message;
     }
@@ -268,7 +279,7 @@ async function initDashboardPage() {
 
   const me = await api('/api/me').catch(() => null);
   if (!me) {
-    window.location.href = '/';
+    window.location.href = appUrl('/');
     return;
   }
   currentUserEl.textContent = `使用者：${me.user.full_name}（${me.user.role}）`;
@@ -322,7 +333,7 @@ async function initDashboardPage() {
 
   logoutBtnEl.addEventListener('click', () => {
     clearToken();
-    window.location.href = '/';
+    window.location.href = appUrl('/');
   });
 
   await renderAll();

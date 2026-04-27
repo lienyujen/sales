@@ -55,3 +55,4 @@ Open: `http://localhost:8080`
 - If frontend is hosted on `https://lienyujen.github.io/sales/`, set **API 伺服器網址** on the login page to your backend domain (for example `https://your-backend-domain.com`).
 - The frontend will call `${API_BASE}/api/*` endpoints using that configured base.
 - `https://lienyujen.github.io` itself is static hosting and cannot serve `POST /api/login` or DB APIs.
+- GitHub Pages deploys from the configured source branch (usually `main`). Ensure your latest commits are merged into that branch before checking the live site.
